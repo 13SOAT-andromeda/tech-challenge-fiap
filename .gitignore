@@ -1,0 +1,47 @@
+# Go
+bin/
+dist/
+vendor/
+*.test
+*.out
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+
+# Terraform
+.terraform/
+*.tfstate
+*.tfstate.*
+crash.log
+*.tfvars
+*.tfvars.json
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+.terraform.lock.hcl
+.terraform.tfstate.lock.info
+
+# Ambiente e Segredos
+.env
+.env.*
+!.env.example
+
+# Makefile e Build Artifacts (AWS Lambda)
+bootstrap
+*.zip
+coverage.txt
+
+# Sistema e Editores
+.DS_Store
+.vscode/
+.idea/
+*.swp
+*~
+Thumbs.db
+
+# LocalStack
+/volume/
+.localstack/
