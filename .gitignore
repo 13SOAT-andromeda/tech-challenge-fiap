@@ -57,3 +57,6 @@ iac-tech-challenge-infra/*
 *.log
 *.tmp
 *.bak
+
+# agents
+condutor/
