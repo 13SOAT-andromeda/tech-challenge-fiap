@@ -39,15 +39,6 @@ secrets.tfvars
 **/kubeconfig
 helm/
 
-# Pastas de Serviços e Infra (Ignoradas conforme solicitado)
-tech-challenge-notification-service/
-tech-challenge-user-authentication/
-tech-challenge-user-authorizer/
-iac-tech-challenge-infra/
-tech-challenge-s1/
-iac-tech-challenge-data/
-iac-tech-challenge-gateway/
-
 # Arquivos temporários de build
 *.log
 *.tmp

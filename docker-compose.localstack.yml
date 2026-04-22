@@ -1,0 +1,29 @@
+version: "3.8"
+
+services:
+  localstack:
+    container_name: "tech-challenge-localstack"
+    image: localstack/localstack-pro:latest
+    ports:
+      - "127.0.0.1:4566:4566"            # LocalStack Gateway
+      - "127.0.0.1:4510-4559:4510-4559"  # Portas de serviços externos
+      - "127.0.0.1:443:443"              # HTTPS (Pro)
+    environment:
+      - LOCALSTACK_AUTH_TOKEN=${LOCALSTACK_AUTH_TOKEN:?}
+      - DEBUG=1
+      - PERSISTENCE=1
+      - DOCKER_HOST=unix:///var/run/docker.sock
+      
+      # IMPORTANTE: Faz com que as Lambdas rodem na mesma rede do LocalStack
+      - LAMBDA_DOCKER_NETWORK=tech-challenge-network
+      - ECR_ENDPOINT_STRATEGY=off
+    volumes:
+      - "./.localstack-volume:/var/lib/localstack"
+      - "/var/run/docker.sock:/var/run/docker.sock"
+      - "./localstack-init.sh:/etc/localstack/init/ready.d/init-aws.sh"
+    networks:
+      - tech-challenge-network
+
+networks:
+  tech-challenge-network:
+    name: tech-challenge-network
