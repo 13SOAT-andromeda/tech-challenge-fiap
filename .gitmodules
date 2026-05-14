@@ -19,3 +19,6 @@
 [submodule "tech-challenge-notification-service"]
 	path = tech-challenge-notification-service
 	url = git@github.com:13SOAT-andromeda/tech-challenge-notification-service.git
+[submodule "tech-challenge-catalog-api"]
+	path = tech-challenge-catalog-api
+	url = git@github.com:13SOAT-andromeda/tech-challenge-catalog-api.git
