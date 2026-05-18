@@ -13,6 +13,8 @@ services:
       - DEBUG=1
       - PERSISTENCE=1
       - DOCKER_HOST=unix:///var/run/docker.sock
+      - HOSTNAME_EXTERNAL=localhost.localstack.cloud
+      - LOCALSTACK_HOST=localhost.localstack.cloud
       
       # IMPORTANTE: Faz com que as Lambdas rodem na mesma rede do LocalStack
       - LAMBDA_DOCKER_NETWORK=tech-challenge-network
@@ -23,6 +25,8 @@ services:
       - "./localstack-init.sh:/etc/localstack/init/ready.d/init-aws.sh"
     networks:
       - tech-challenge-network
+    extra_hosts:
+      - "localhost.localstack.cloud:127.0.0.1"
 
 networks:
   tech-challenge-network:

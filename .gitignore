@@ -46,3 +46,7 @@ helm/
 
 # agents
 condutor/
+
+#localstack
+.localstack/
+.localstack-volume/.catalog-db-port
