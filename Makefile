@@ -366,9 +366,8 @@ localstack-start-catalog: localstack-create-catalog-rds
 	  -e AWS_REGION="$(AWS_REGION)" \
 	  -e AWS_ACCESS_KEY_ID="test" \
 	  -e AWS_SECRET_ACCESS_KEY="test" \
-	  -e SNS_TOPIC_STOCK_RESERVED_ARN="arn:aws:sns:$(AWS_REGION):000000000000:catalog-events-topic" \
-	  -e SNS_TOPIC_BACKORDER_CREATED_ARN="arn:aws:sns:$(AWS_REGION):000000000000:catalog-events-topic" \
-	  -e SNS_TOPIC_STOCK_INSUFFICIENT_ARN="arn:aws:sns:$(AWS_REGION):000000000000:catalog-events-topic" \
+	  -e SNS_TOPIC_CATALOG_EVENTS_ARN="arn:aws:sns:$(AWS_REGION):000000000000:catalog-events-topic" \
+	  -e SQS_ORDERS_APPROVED_QUEUE_URL="http://sqs.$(AWS_REGION).localhost.localstack.cloud:4566/000000000000/orders-approved-queue" \
 	  -e JWT_SECRET="$(JWT_SECRET)" \
 	  -e HTTP_PORT="8080" \
 	  tech-challenge-catalog-api:localstack
