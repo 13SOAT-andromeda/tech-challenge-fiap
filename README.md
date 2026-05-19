@@ -87,6 +87,64 @@ git push
 
 ---
 
+## 🚀 Deployment e Orquestração
+
+Este projeto utiliza um **Makefile** unificado para orquestrar o build das imagens Docker e a aplicação do Terraform em diferentes ambientes.
+
+### 1. Configuração Inicial (Ambiente)
+Antes de qualquer deploy, você precisa gerar o arquivo `.env` com as definições de target e credenciais:
+
+```bash
+make config
+```
+*   **Deploy Target:** Escolha `localstack` ou `aws`.
+*   **LocalStack Auth Token:** Obrigatório para o modo `localstack` (LocalStack Pro).
+
+---
+
+### 💻 Deploy no LocalStack (Desenvolvimento Local)
+
+Ideal para testes rápidos e validação de infraestrutura sem custos.
+
+**Pré-requisitos:**
+*   Docker e Docker Compose instalados.
+*   WSL2 (se estiver no Windows).
+*   Token do LocalStack Pro configurado via `make config`.
+
+**Passo a Passo:**
+1.  **Limpar ambiente anterior (recomendado):**
+    ```bash
+    docker compose -f docker-compose.localstack.yml down
+    ```
+2.  **Executar Deploy Completo:**
+    ```bash
+    make deploy-all
+    ```
+    *Este comando irá: subir o container LocalStack, criar os repositórios ECR, buildar as imagens de todos os microserviços, fazer o push e aplicar o Terraform (Infra, Data e Gateway).*
+
+**Nota para WSL2:** O deploy utiliza o domínio `localhost.localstack.cloud` para evitar erros de resolução de host e permitir que o Docker trate o registro como seguro.
+
+---
+
+### ☁️ Deploy na AWS (Produção/Staging)
+
+Utiliza os recursos reais da nuvem AWS.
+
+**Pré-requisitos:**
+*   AWS CLI configurado com credenciais válidas (ou através do `LabRole` da FIAP).
+*   Permissões para gerenciar RDS, EKS, ECR e SQS.
+
+**Passo a Passo:**
+1.  **Configurar o Target:**
+    Execute `make config` e selecione `aws`.
+2.  **Executar Deploy Completo:**
+    ```bash
+    make deploy-all
+    ```
+    *No modo AWS, o Makefile fará o login no ECR real, buildará as imagens para plataforma linux/amd64 e aplicará o Terraform nas pastas `aws/` de cada módulo de infraestrutura.*
+
+---
+
 ## 🔍 Resolução de Problemas (Troubleshooting)
 
 ### "O submódulo está como Detached HEAD"
