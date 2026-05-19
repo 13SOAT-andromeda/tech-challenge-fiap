@@ -46,7 +46,12 @@ helm/
 
 # agents
 condutor/
+conductor/
+.specify/
+.claude/
 
 #localstack
 .localstack/
-.localstack-volume/.catalog-db-port
+.localstack-volume/
+.catalog-db-port
+response.json
