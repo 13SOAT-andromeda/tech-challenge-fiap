@@ -51,6 +51,17 @@ USER_ADMIN_EMAIL    ?= admin2@example.com
 USER_ADMIN_PASSWORD ?= Admin123!
 ADMIN_DOCUMENT      ?= 42692605802
 
+# Notification service
+NOTIFICATION_S3_BUCKET       ?= tech-challenge-notification-templates
+NOTIFICATION_EVENTS_TOPIC    ?= notification-events-topic
+NOTIFICATION_QUEUE           ?= notification-queue
+NOTIFICATION_DEFAULT_EMAIL   ?= $(USER_ADMIN_EMAIL)
+NOTIFICATION_DEFAULT_NAME    ?= Administrador
+MAILTRAP_TOKEN               ?= 6a45f171cfc233e4edc93d8b847cf19f
+MAILTRAP_URL                 ?= https://send.api.mailtrap.io/api
+MAILTRAP_FROM_EMAIL          ?= contato@nohats.net.br
+MAILTRAP_FROM_NAME           ?= Nohats
+
 # Exportando para Terraform
 export TF_VAR_cluster_role_arn := $(DEFAULT_ROLE_ARN)
 export TF_VAR_db_password      := $(AWS_RDS_DB_PASSWORD)
@@ -83,6 +94,8 @@ help:
 	@echo "║    make localstack-create-lambdas  Recria as 3 funções Lambda    ║"
 	@echo "║    make localstack-start-catalog   Build+run catalog-api container║"
 	@echo "║    make localstack-apply-patch Aplica patch pull_image           ║"
+	@echo "║    make localstack-create-notification-infra  SNS+SQS notif     ║"
+	@echo "║    make localstack-upload-notification-templates  Templates S3  ║"
 	@echo "║    make localstack-bootstrap   Cria bucket S3 de estado          ║"
 	@echo "║    make localstack-tf-infra    Aplica iac-tech-challenge-infra   ║"
 	@echo "║    make localstack-tf-data     Aplica iac-tech-challenge-data    ║"
@@ -140,7 +153,10 @@ env-check:
 .PHONY: localstack-up-all
 localstack-up-all: env-check localstack-start localstack-bootstrap \
     localstack-tf-infra localstack-tf-data localstack-tf-gateway \
-    localstack-seed-admin localstack-create-lambdas localstack-start-catalog
+    localstack-seed-admin localstack-create-lambdas \
+    localstack-create-notification-infra \
+    localstack-upload-notification-templates \
+    localstack-start-catalog
 	@echo ""
 	@echo "==> Infraestrutura LocalStack completa e pronta!"
 	@echo "==> Testando endpoint de login..."
@@ -180,6 +196,8 @@ localstack-restart:
 	@echo " LocalStack pronto!"
 	@$(MAKE) localstack-apply-patch
 	@$(MAKE) localstack-create-lambdas
+	@$(MAKE) localstack-create-notification-infra
+	@$(MAKE) localstack-upload-notification-templates
 	@$(MAKE) localstack-start-catalog
 	@echo ""
 	@echo "==> LocalStack restaurado! Teste: curl -X POST http://d95e0bf3.execute-api.localhost.localstack.cloud:4566/localstack/api/sessions ..."
@@ -238,7 +256,7 @@ localstack-create-lambdas: localstack-init-services
 	  --code ImageUri=$(DOCKER_REGISTRY)/tech-challenge-notification-service-repo:latest \
 	  --role arn:aws:iam::000000000000:role/eks-local-role \
 	  --timeout 30 --memory-size 128 \
-	  --environment "Variables={AWS_REGION=$(AWS_REGION),SNS_TOPIC=arn:aws:sns:$(AWS_REGION):000000000000:catalog-events-topic,PROJECT_ENV=localstack}" \
+	  --environment "Variables={AWS_REGION=$(AWS_REGION),PROJECT_ENV=localstack,S3_BUCKET_NAME=$(NOTIFICATION_S3_BUCKET),MAILTRAP_TOKEN=$(MAILTRAP_TOKEN),MAILTRAP_URL=$(MAILTRAP_URL),MAILTRAP_FROM_EMAIL=$(MAILTRAP_FROM_EMAIL),MAILTRAP_FROM_NAME=$(MAILTRAP_FROM_NAME),JWT_SECRET=$(JWT_SECRET)}" \
 	  --query 'State' --output text 2>&1
 	@echo "==> Aguardando tech-challenge-user-authentication ficar Active..."
 	@for i in $$(seq 1 20); do \
@@ -255,6 +273,8 @@ localstack-create-lambdas: localstack-init-services
 localstack-bootstrap:
 	@echo "==> Criando bucket de estado S3 [$(S3_BUCKET)]..."
 	@awslocal s3 mb s3://$(S3_BUCKET) --region $(AWS_REGION) 2>/dev/null || true
+	@echo "==> Criando bucket S3 de templates de notificação [$(NOTIFICATION_S3_BUCKET)]..."
+	@awslocal s3 mb s3://$(NOTIFICATION_S3_BUCKET) --region $(AWS_REGION) 2>/dev/null || true
 
 .PHONY: localstack-tf-infra
 localstack-tf-infra:
@@ -367,7 +387,10 @@ localstack-start-catalog: localstack-create-catalog-rds
 	  -e AWS_ACCESS_KEY_ID="test" \
 	  -e AWS_SECRET_ACCESS_KEY="test" \
 	  -e SNS_TOPIC_CATALOG_EVENTS_ARN="arn:aws:sns:$(AWS_REGION):000000000000:catalog-events-topic" \
+	  -e SNS_TOPIC_NOTIFICATION_EVENTS_ARN="arn:aws:sns:$(AWS_REGION):000000000000:$(NOTIFICATION_EVENTS_TOPIC)" \
 	  -e SQS_ORDERS_APPROVED_QUEUE_URL="http://sqs.$(AWS_REGION).localhost.localstack.cloud:4566/000000000000/orders-approved-queue" \
+	  -e NOTIFICATION_DEFAULT_EMAIL="$(NOTIFICATION_DEFAULT_EMAIL)" \
+	  -e NOTIFICATION_DEFAULT_NAME="$(NOTIFICATION_DEFAULT_NAME)" \
 	  -e JWT_SECRET="$(JWT_SECRET)" \
 	  -e HTTP_PORT="8080" \
 	  tech-challenge-catalog-api:localstack
@@ -388,6 +411,67 @@ localstack-start-catalog: localstack-create-catalog-rds
 	      --query 'IntegrationUri' --output text 2>/dev/null; \
 	  fi
 	@echo "==> Catalog API pronta!"
+
+.PHONY: localstack-create-notification-infra
+localstack-create-notification-infra:
+	@echo "==> Criando infraestrutura de notificações (SNS → SQS → Lambda)..."
+	@awslocal sns create-topic \
+	  --name $(NOTIFICATION_EVENTS_TOPIC) \
+	  --query 'TopicArn' --output text 2>/dev/null || true
+	@awslocal sqs create-queue \
+	  --queue-name $(NOTIFICATION_QUEUE)-dlq \
+	  --query 'QueueUrl' --output text 2>/dev/null || true
+	@awslocal sqs create-queue \
+	  --queue-name $(NOTIFICATION_QUEUE) \
+	  --query 'QueueUrl' --output text 2>/dev/null || true
+	@echo "==> Criando subscription SQS no tópico de notificações..."
+	@TOPIC_ARN="arn:aws:sns:$(AWS_REGION):000000000000:$(NOTIFICATION_EVENTS_TOPIC)"; \
+	QUEUE_ARN="arn:aws:sqs:$(AWS_REGION):000000000000:$(NOTIFICATION_QUEUE)"; \
+	awslocal sns subscribe \
+	  --topic-arn "$$TOPIC_ARN" \
+	  --protocol sqs \
+	  --notification-endpoint "$$QUEUE_ARN" \
+	  --query 'SubscriptionArn' --output text 2>/dev/null
+	@echo "==> Criando event source mapping SQS → Lambda notification-service..."
+	@QUEUE_ARN="arn:aws:sqs:$(AWS_REGION):000000000000:$(NOTIFICATION_QUEUE)"; \
+	UUID=$$(awslocal lambda list-event-source-mappings \
+	  --function-name tech-challenge-notification-service \
+	  --event-source-arn "$$QUEUE_ARN" \
+	  --query 'EventSourceMappings[0].UUID' --output text 2>/dev/null); \
+	if [ -n "$$UUID" ] && [ "$$UUID" != "None" ]; then \
+	  awslocal lambda delete-event-source-mapping --uuid "$$UUID" 2>/dev/null || true; \
+	fi; \
+	awslocal lambda create-event-source-mapping \
+	  --function-name tech-challenge-notification-service \
+	  --event-source-arn "$$QUEUE_ARN" \
+	  --batch-size 1 \
+	  --query 'UUID' --output text 2>/dev/null
+	@echo "==> Infraestrutura de notificações pronta!"
+
+.PHONY: localstack-upload-notification-templates
+localstack-upload-notification-templates:
+	@echo "==> Fazendo upload dos templates de email para S3 [$(NOTIFICATION_S3_BUCKET)]..."
+	@awslocal s3 cp \
+	  tech-challenge-notification-service/templates/STOCK_RESERVED.html \
+	  s3://$(NOTIFICATION_S3_BUCKET)/templates/STOCK_RESERVED.html \
+	  --metadata "subject=Estoque Reservado - Pedido em processamento" 2>/dev/null || true
+	@awslocal s3 cp \
+	  tech-challenge-notification-service/templates/BACKORDER_CREATED.html \
+	  s3://$(NOTIFICATION_S3_BUCKET)/templates/BACKORDER_CREATED.html \
+	  --metadata "subject=Backorder Criado - Item temporariamente indisponivel" 2>/dev/null || true
+	@awslocal s3 cp \
+	  tech-challenge-notification-service/templates/STOCK_RESERVATION_FAILED.html \
+	  s3://$(NOTIFICATION_S3_BUCKET)/templates/STOCK_RESERVATION_FAILED.html \
+	  --metadata "subject=Falha na Reserva de Estoque" 2>/dev/null || true
+	@awslocal s3 cp \
+	  tech-challenge-notification-service/templates/ORDER_APPROVAL_REQUEST.html \
+	  s3://$(NOTIFICATION_S3_BUCKET)/templates/ORDER_APPROVAL_REQUEST.html \
+	  --metadata "subject=Aprovacao de Ordem de Servico" 2>/dev/null || true
+	@awslocal s3 cp \
+	  tech-challenge-notification-service/templates/ORDER_AWAITING_PAYMENT.html \
+	  s3://$(NOTIFICATION_S3_BUCKET)/templates/ORDER_AWAITING_PAYMENT.html \
+	  --metadata "subject=Pagamento Aguardado - Ordem de Servico" 2>/dev/null || true
+	@echo "==> Templates carregados com sucesso!"
 
 .PHONY: localstack-push-images
 localstack-push-images: localstack-login-ecr
